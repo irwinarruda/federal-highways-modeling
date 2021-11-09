@@ -9,6 +9,8 @@ library(tseries)
 library(ggplot2)
 library(patchwork)
 library(lmtest)
+library(forecast)
+library(vars)
 setwd("C:/Users/arrud/Desktop/projetos/modelagem-rodovias-federais")
 
 # DADOS PRINCIPAIS
@@ -55,6 +57,14 @@ fix_inflation = function(acc_value, year) {
   }
 }
 
+cross_correlate_arima = function(arima, corr_ts) {
+  x_residuals = arima$residuals
+  y_model = Arima(corr_ts, model = arima)
+  y_filtered = residuals(y_model)
+  ccf(x_residuals, y_filtered)
+  return(list(x_residuals, y_filtered))
+}
+
 # TRATAMENTO DE DADOS
 ################################################################################
 
@@ -65,7 +75,11 @@ for (ano in pib_df_desde_2010[['Ano']]) {
   pib_list[[as.character(ano)]] = pib_no_ano
   pib_vector = c(pib_vector, pib_no_ano)
 }
-pib_ts = ts(pib_vector)
+pib_ts = ts(
+  pib_vector,
+  start = 2010,
+  frequency = 1
+)
 
 nomes_concess = levels(factor(receita_pedagio_df[['concessionaria']]))
 
@@ -193,17 +207,71 @@ ggplot() +
 
 # FIT ARIMA
 ################################################################################
+nomes_concess_escolhidas = c("CONCER", "CRT", "AUTOPISTA FLUMINENSE", "AUTOPISTA LITORAL SUL")
 
-fit_arima_concer = auto.arima(dados_por_concess$CONCER, d = 1, D = 1, stepwise = FALSE, approximation = FALSE, trace = TRUE) # xreg = 
-fit_arima_crt = auto.arima(dados_por_concess$CRT, d = 1, D = 1, stepwise = FALSE, approximation = FALSE, trace = TRUE) # xreg = 
-fit_arima_fluminense = auto.arima(dados_por_concess$`AUTOPISTA FLUMINENSE`, xreg = pib_ts, d = 1, D = 1, stepwise = FALSE, approximation = FALSE, trace = TRUE) # xreg = 
-fit_arima_litoral = auto.arima(dados_por_concess$`AUTOPISTA LITORAL SUL`, d = 1, D = 1, stepwise = FALSE, approximation = FALSE, trace = TRUE) # xreg = 
-print(summary(fit_arima_concer))
+fit_arima = list()
+for (concess in nomes_concess_escolhidas) {
+  fit_arima[[concess]] = auto.arima(
+    dados_por_concess[[concess]],
+    stepwise = FALSE,
+    approximation = FALSE,
+    trace = TRUE,
+    d = 1,
+    D = 1
+  )
+  checkresiduals(fit_arima[[concess]])
+}
+fit_arima
 
-checkresiduals(fit_arima_concer)
-checkresiduals(fit_arima_crt)
-checkresiduals(fit_arima_fluminense)
-checkresiduals(fit_arima_litoral)
+cross_correlate_arima(
+  arima = fit_arima$CONCER,
+  corr_ts = pib_ts
+)
+
+pib_concess_unions = list()
+for (concess in nomes_concess_escolhidas) {
+  pib_concess_unions[[concess]] = ts.union(dados_por_concess[[concess]], pib_ts)
+}
+pib_concess_unions
+
+plot.ts(pib_concess_unions$CONCER, main = "Dados de Concessionarias e PIB", xlab = "Tempo", ylab = "Valores", col = "blue", lwd = 4, plot.type = "multiple")
+plot.ts(pib_concess_unions$CRT, main = "Dados de Concessionarias e PIB", xlab = "Tempo", ylab = "Valores", col = "blue", lwd = 4, plot.type = "multiple")
+plot.ts(pib_concess_unions$`AUTOPISTA FLUMINENSE`, main = "Dados de Concessionarias e PIB", xlab = "Tempo", ylab = "Valores", col = "blue", lwd = 4, plot.type = "multiple")
+plot.ts(pib_concess_unions$`AUTOPISTA LITORAL SUL`, main = "Dados de Concessionarias e PIB", xlab = "Tempo", ylab = "Valores", col = "blue", lwd = 4, plot.type = "multiple")
+
+set.seed(999)
+linear_reg = list()
+for (concess in nomes_concess_escolhidas) {
+  linear_reg[[concess]] = lm(
+    pib_concess_unions[[concess]][, 1] ~ pib_concess_unions[[concess]][, 2]
+  )
+  checkresiduals(linear_reg[[concess]])
+}
+
+arima = list()
+for (concess in nomes_concess_escolhidas) {
+  arima[[concess]] = auto.arima(
+    pib_concess_unions[[concess]][, 1],
+    xreg = pib_concess_unions[[concess]][, 2]
+  )
+  checkresiduals(arima[[concess]])
+}
+
+
+pib_diff = diff(pib_ts)
+concess_diff = diff_dados_por_concess$CONCER
+
+Banco = cbind(pib_diff, concess_diff)
+
+model_var = VAR(Banco, p = 2, type = "const")
+model_var
+
+model_var2 = VAR(Banco, type = "const", lag.max = 3, ic = "AIC")
+model_var2
+
+causality(model_var, cause = "concess_diff")$Granger
+
+causality(model_var, cause = "pib_diff")$Granger
 
 
 ########################## TÉCNICAS DE MODELAGEM ###############################
