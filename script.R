@@ -1,6 +1,6 @@
 ########################## TÉCNICAS DE MODELAGEM ###############################
 
-
+################################################################################
 # AMBIENTE E BIBLIOTECAS
 ################################################################################
 library(fpp2)
@@ -40,6 +40,7 @@ for (ano in pib_df_desde_2010[['Ano']]) {
   inflacao_list[[as.character(ano)]] = as.double(gsub(",", "", pib_df_desde_2010[pib_df_desde_2010[['Ano']] == ano,][['Inflação...IPCA..var..acumulada.no.ano....Fonte.IBGE']])) / 100
 }
 
+################################################################################
 # FUNÇÕES AUXILIARES
 ################################################################################
 
@@ -62,9 +63,10 @@ cross_correlate_arima = function(arima, corr_ts) {
   y_model = Arima(corr_ts, model = arima)
   y_filtered = residuals(y_model)
   ccf(x_residuals, y_filtered)
-  return(list(x_residuals, y_filtered))
+  return(c(x_residuals, y_filtered))
 }
 
+################################################################################
 # TRATAMENTO DE DADOS
 ################################################################################
 
@@ -125,6 +127,7 @@ pib_ts
 dados_por_concess
 nomes_concess_tratados
 
+################################################################################
 # ANÁLISE E INFERÊNCIA
 ################################################################################
 
@@ -205,9 +208,13 @@ ggplot() +
   theme(axis.text.x = element_text(size = rel(0.7), angle = 90)) +
   scale_y_continuous(labels = scales::comma)
 
+################################################################################
 # FIT ARIMA
 ################################################################################
 nomes_concess_escolhidas = c("CONCER", "CRT", "AUTOPISTA FLUMINENSE", "AUTOPISTA LITORAL SUL")
+
+# ANALISANDO ARIMA DAS CONCESSIONÁRIAS
+################################################################################
 
 fit_arima = list()
 for (concess in nomes_concess_escolhidas) {
@@ -219,14 +226,17 @@ for (concess in nomes_concess_escolhidas) {
     d = 1,
     D = 1
   )
-  checkresiduals(fit_arima[[concess]])
 }
-fit_arima
+checkresiduals(fit_arima$CONCER)
 
+# Correlacionar os resíduos
 cross_correlate_arima(
   arima = fit_arima$CONCER,
   corr_ts = pib_ts
 )
+
+# UNION
+################################################################################
 
 pib_concess_unions = list()
 for (concess in nomes_concess_escolhidas) {
@@ -234,10 +244,16 @@ for (concess in nomes_concess_escolhidas) {
 }
 pib_concess_unions
 
+# PLOT UNION
+################################################################################
+
 plot.ts(pib_concess_unions$CONCER, main = "Dados de Concessionarias e PIB", xlab = "Tempo", ylab = "Valores", col = "blue", lwd = 4, plot.type = "multiple")
 plot.ts(pib_concess_unions$CRT, main = "Dados de Concessionarias e PIB", xlab = "Tempo", ylab = "Valores", col = "blue", lwd = 4, plot.type = "multiple")
 plot.ts(pib_concess_unions$`AUTOPISTA FLUMINENSE`, main = "Dados de Concessionarias e PIB", xlab = "Tempo", ylab = "Valores", col = "blue", lwd = 4, plot.type = "multiple")
 plot.ts(pib_concess_unions$`AUTOPISTA LITORAL SUL`, main = "Dados de Concessionarias e PIB", xlab = "Tempo", ylab = "Valores", col = "blue", lwd = 4, plot.type = "multiple")
+
+# REGRESSÃO UNION
+################################################################################
 
 set.seed(999)
 linear_reg = list()
@@ -248,15 +264,20 @@ for (concess in nomes_concess_escolhidas) {
   checkresiduals(linear_reg[[concess]])
 }
 
-arima = list()
+# ARIMA COM 2 VARIÁVEIS
+################################################################################
+
+arima_concess_pib = list()
 for (concess in nomes_concess_escolhidas) {
-  arima[[concess]] = auto.arima(
+  arima_concess_pib[[concess]] = auto.arima(
     pib_concess_unions[[concess]][, 1],
     xreg = pib_concess_unions[[concess]][, 2]
   )
-  checkresiduals(arima[[concess]])
 }
+checkresiduals(arima_concess_pib$CONCER)
 
+# 
+################################################################################
 
 pib_diff = diff(pib_ts)
 concess_diff = diff_dados_por_concess$CONCER
