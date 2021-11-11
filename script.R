@@ -62,7 +62,7 @@ cross_correlate_arima = function(arima, corr_ts) {
   x_residuals = arima$residuals
   y_model = Arima(corr_ts, model = arima)
   y_filtered = residuals(y_model)
-  ccf(x_residuals, y_filtered)
+  ccf(x_residuals, y_filtered, )
   return(c(x_residuals, y_filtered))
 }
 
@@ -72,10 +72,12 @@ cross_correlate_arima = function(arima, corr_ts) {
 
 pib_list = list()
 pib_vector = c()
+pib_dividido = c()
 for (ano in pib_df_desde_2010[['Ano']]) {
   pib_no_ano = as.double(gsub(",", "", pib_df_desde_2010[pib_df_desde_2010[['Ano']] == ano,][['Produto.interno.bruto.em.R..do.último.ano...R...PIB.REAL.EM.R..DE.2020..Fonte..IBGE']]))
   pib_list[[as.character(ano)]] = pib_no_ano
   pib_vector = c(pib_vector, pib_no_ano)
+  pib_dividido = c(pib_dividido, pib_no_ano / 1000000)
 }
 pib_ts = ts(
   pib_vector,
@@ -122,6 +124,7 @@ nomes_concess
 inflacao_list
 pib_list
 pib_vector
+pib_dividido
 
 pib_ts
 dados_por_concess
@@ -133,28 +136,32 @@ nomes_concess_tratados
 
 times = c(2010:2020)
 ggplot() +
-  geom_line(aes(x = times, y = dados_por_concess$`AUTOPISTA FERNÃO DIAS`, color = "AUTOPISTA FERNÃO DIAS")) +
   geom_line(aes(x = times, y = dados_por_concess$`AUTOPISTA FLUMINENSE`, color = "AUTOPISTA FLUMINENSE")) +
   geom_line(aes(x = times, y = dados_por_concess$`AUTOPISTA LITORAL SUL`, color = "AUTOPISTA LITORAL SUL")) +
-  geom_line(aes(x = times, y = dados_por_concess$`AUTOPISTA PLANALTO SUL`, color = "AUTOPISTA PLANALTO SUL")) +
-  geom_line(aes(x = times, y = dados_por_concess$`AUTOPISTA REGIS BITTENCOURT`, color = "AUTOPISTA REGIS BITTENCOURT")) +
   geom_line(aes(x = times, y = dados_por_concess$CONCER, color = "CONCER")) +
   geom_line(aes(x = times, y = dados_por_concess$CRT, color = "CRT")) +
-  geom_line(aes(x = times, y = dados_por_concess$ECOSUL, color = "ECOSUL")) +
-  geom_line(aes(x = times, y = dados_por_concess$`RODOVIA DO AÇO`, color = "RODOVIA DO AÇO")) +
-  geom_line(aes(x = times, y = dados_por_concess$TRANSBRASILIANA, color = "TRANSBRASILIANA")) +
-  geom_line(aes(x = times, y = dados_por_concess$`VIA BAHIA`, color = "VIA BAHIA")) +
   xlab("Tempo (ano)") +
   ylab("Valor (reais)") +
   theme_bw() +
   theme(plot.title = element_text(hjust = 0.5)) +
+  labs(color='cores') +
+  scale_x_continuous(breaks = seq(from = 2010, to = 2020, by = 1)) +
+  scale_y_continuous(labels = scales::comma)
+
+ggplot() +
+  geom_line(aes(x = times, y = pib_dividido, color = "PIB"), size = 1.2) +
+  xlab("Tempo (ano)") +
+  ylab("Valor (milhões de reais)") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5), axis.text.y = element_text(size = rel(1), angle = 0)) +
+  labs(color='cores') +
   scale_x_continuous(breaks = seq(from = 2010, to = 2020, by = 1)) +
   scale_y_continuous(labels = scales::comma)
 
 # Concessionárias Escolhidas
 # AUTOPISTA LITORAL SUL, AUTOPISTA FLUMINENCE
 # CONCER, CRT
-
+# "CONCER", "CRT", "AUTOPISTA FLUMINENSE", "AUTOPISTA LITORAL SUL"
 # K_TEST - Kwiatkowski-Phillips-Schmidt-Shin
 ################################################################################
 
@@ -205,7 +212,8 @@ ggplot() +
   geom_bar(stat = "identity", aes(y = diff_dados_por_concess$`VIA BAHIA`[10], x = "Via BA", color = "VIA BAHIA")) +
   xlab("Concessionárias") +
   ylab("Valor (reais)") +
-  theme(axis.text.x = element_text(size = rel(0.7), angle = 90)) +
+  labs(color='cores') +
+  theme(axis.text.x = element_text(size = rel(0.8), angle = 90)) +
   scale_y_continuous(labels = scales::comma)
 
 ################################################################################
@@ -227,11 +235,27 @@ for (concess in nomes_concess_escolhidas) {
     D = 1
   )
 }
-checkresiduals(fit_arima$CONCER)
+fit_arima
+checkresiduals(fit_arima$CONCER, title = "Residuos do Arima da CONCER")
+checkresiduals(fit_arima$CRT, title = "Residuos do Arima da CRT")
+checkresiduals(fit_arima$`AUTOPISTA FLUMINENSE`, title = "Residuos do Arima da AUTOPISTA FLUMINENSE")
+checkresiduals(fit_arima$`AUTOPISTA LITORAL SUL`, title = "Residuos do Arima da AUTOPISTA LITORAL SUL")
 
 # Correlacionar os resíduos
 cross_correlate_arima(
   arima = fit_arima$CONCER,
+  corr_ts = pib_ts
+)
+cross_correlate_arima(
+  arima = fit_arima$CRT,
+  corr_ts = pib_ts
+)
+cross_correlate_arima(
+  arima = fit_arima$`AUTOPISTA FLUMINENSE`,
+  corr_ts = pib_ts
+)
+cross_correlate_arima(
+  arima = fit_arima$`AUTOPISTA LITORAL SUL`,
   corr_ts = pib_ts
 )
 
@@ -255,18 +279,26 @@ plot.ts(pib_concess_unions$`AUTOPISTA LITORAL SUL`, main = "Dados de Concessiona
 # REGRESSÃO UNION
 ################################################################################
 
-set.seed(999)
 linear_reg = list()
 for (concess in nomes_concess_escolhidas) {
   linear_reg[[concess]] = lm(
     pib_concess_unions[[concess]][, 1] ~ pib_concess_unions[[concess]][, 2]
   )
-  checkresiduals(linear_reg[[concess]])
 }
+
+checkresiduals(linear_reg$CONCER)
+checkresiduals(linear_reg$CRT)
+checkresiduals(linear_reg$`AUTOPISTA FLUMINENSE`)
+checkresiduals(linear_reg$`AUTOPISTA LITORAL SUL`)
+summary(linear_reg$CONCER)
+summary(linear_reg$CRT)
+summary(linear_reg$`AUTOPISTA FLUMINENSE`)
+summary(linear_reg$`AUTOPISTA LITORAL SUL`)
 
 # ARIMA COM 2 VARIÁVEIS
 ################################################################################
 
+set.seed(999)
 arima_concess_pib = list()
 for (concess in nomes_concess_escolhidas) {
   arima_concess_pib[[concess]] = auto.arima(
@@ -274,7 +306,11 @@ for (concess in nomes_concess_escolhidas) {
     xreg = pib_concess_unions[[concess]][, 2]
   )
 }
+
 checkresiduals(arima_concess_pib$CONCER)
+checkresiduals(arima_concess_pib$CRT)
+checkresiduals(arima_concess_pib$`AUTOPISTA FLUMINENSE`)
+checkresiduals(arima_concess_pib$`AUTOPISTA LITORAL SUL`)
 
 # 
 ################################################################################
