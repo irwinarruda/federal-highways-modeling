@@ -1,7 +1,10 @@
-# Impacto da Pandemia nas Rodovias Federais.
+# Impacts of COVID-19 on Brazilian federal highways.
 
-Esse repositório tem o objetivo de demonstrar os arquivos referentes à modelagem dos impactos da pandemia nas rodovias Federais.
+This repository was made to store all the files needed for a project that aims to model the real impacts of COVID-19 to the main Brazilian federal highways.
 
-O repositório possui a base de dados utilizada em .csv e o arquivo de scripts em .R que foi responsável por manipular e tratar os dados.
+Two datasets were used for this project.
 
-Esse trabalho foi feito durante a matéria Técnicas de Modelagem em Transportes (UFG) em 2021.
+-   Timeline of Brazil’s GPD, which can be found at [DataSebrae](https://datasebrae.com.br/pib/?pagina=evolucao-do-pib&ano=1990);
+-   Federal highway toll plazas revenue, which can be found at [ANTT](https://dados.antt.gov.br/dataset/receita-pedagio);
+
+The project was made during a class called **Transport Modeling Techniques** at Universidade Federal de Goiás (UFG).
